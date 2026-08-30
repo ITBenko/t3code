@@ -62,6 +62,9 @@ export function shouldShowComposerContextStrip(input: {
   return input.hasActiveProject && (input.isGitRepo || input.showEnvironmentIndicator);
 }
 
+/** Label for the Docker sandbox entry in the workspace picker. */
+export const SANDBOX_ENV_LABEL = "Sandbox (Docker)";
+
 export function resolveEnvModeLabel(mode: EnvMode): string {
   return mode === "worktree" ? "New worktree" : "Current checkout";
 }

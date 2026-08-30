@@ -1,4 +1,6 @@
 import {
+  AuthAccessReadScope,
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthRelayReadScope,
@@ -35,6 +37,21 @@ describe("RPC authorization scopes", () => {
       AuthRelayReadScope,
     );
     expect(requiredScopeForRpcMethod(WS_METHODS.cloudInstallRelayClient)).toBe(AuthRelayWriteScope);
+  });
+
+  it("treats local Docker lifecycle operations as host administration", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.localDockerSandboxesList)).toBe(
+      AuthAccessReadScope,
+    );
+    for (const method of [
+      WS_METHODS.localDockerSandboxesCreate,
+      WS_METHODS.localDockerSandboxesStart,
+      WS_METHODS.localDockerSandboxesStop,
+      WS_METHODS.localDockerSandboxesDelete,
+      WS_METHODS.localDockerSandboxesPair,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthAccessWriteScope);
+    }
   });
 
   it("requires permission to operate on a thread before uploading feedback", () => {

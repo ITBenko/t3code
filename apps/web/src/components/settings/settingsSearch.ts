@@ -244,6 +244,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/source-control",
   },
   {
+    id: "local-docker-sandboxes",
+    title: "Local sandboxes",
+    to: "/settings/connections",
+  },
+  {
     id: "remote-environments",
     title: "Remote environments",
     to: "/settings/connections",

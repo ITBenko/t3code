@@ -112,6 +112,7 @@ import {
   connectPairing as connectPairingAtom,
   connectSshEnvironment as connectSshEnvironmentAtom,
 } from "~/connection/onboarding";
+import { localDockerSandboxes } from "~/state/localDockerSandboxes";
 import { useEnvironmentQuery } from "~/state/query";
 import {
   desktopNetworkAccessStateAtom,
@@ -130,6 +131,7 @@ import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
+import { LocalDockerSandboxesSettings } from "./LocalDockerSandboxesSettings";
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
 const EMPTY_ADVERTISED_ENDPOINTS: ReadonlyArray<AdvertisedEndpoint> = [];
@@ -1768,6 +1770,10 @@ export function ConnectionsSettings() {
         .toSorted((left, right) => left.label.localeCompare(right.label)),
     [environments],
   );
+  const savedEnvironmentIds = useMemo(
+    () => new Set(savedEnvironments.map((environment) => environment.environmentId)),
+    [savedEnvironments],
+  );
   const savedDesktopSshEnvironmentsByAlias = useMemo(
     () =>
       savedEnvironments.reduce<Record<string, EnvironmentPresentation>>(
@@ -1880,6 +1886,34 @@ export function ConnectionsSettings() {
   );
   const canManageLocalBackend = currentSessionScopes?.includes(AuthAccessWriteScope) ?? false;
   const canManageRelay = currentSessionScopes?.includes(AuthRelayWriteScope) ?? false;
+  const canManageLocalDockerSandboxes =
+    primaryEnvironmentId !== null &&
+    primaryServerConfig?.environment.capabilities.localDockerSandboxes === true &&
+    (desktopBridge !== undefined || isLoopbackHostname(window.location.hostname)) &&
+    canManageLocalBackend;
+  // A paired sandbox is still a saved environment, but it belongs to the machine
+  // running Docker and is managed entirely from "Local sandboxes". Listing it
+  // again under remote environments would offer lifecycle actions that do not
+  // apply to it and read as a second, unrelated backend.
+  const localSandboxes = useEnvironmentQuery(
+    canManageLocalDockerSandboxes && primaryEnvironmentId !== null
+      ? localDockerSandboxes.list({ environmentId: primaryEnvironmentId, input: {} })
+      : null,
+  );
+  const localSandboxEnvironmentIds = useMemo(() => {
+    const ids = new Set<EnvironmentId>();
+    for (const sandbox of localSandboxes.data?.sandboxes ?? []) {
+      if (sandbox.environmentId !== undefined) ids.add(sandbox.environmentId);
+    }
+    return ids;
+  }, [localSandboxes.data]);
+  const remoteEnvironments = useMemo(
+    () =>
+      savedEnvironments.filter(
+        (environment) => !localSandboxEnvironmentIds.has(environment.environmentId),
+      ),
+    [localSandboxEnvironmentIds, savedEnvironments],
+  );
   const authAccessChanges = useEnvironmentQuery(
     canManageLocalBackend && primaryEnvironmentId !== null
       ? authEnvironment.accessChanges({
@@ -3380,6 +3414,13 @@ export function ConnectionsSettings() {
         </SettingsSection>
       )}
 
+      {canManageLocalDockerSandboxes && primaryEnvironmentId !== null ? (
+        <LocalDockerSandboxesSettings
+          primaryEnvironmentId={primaryEnvironmentId}
+          savedEnvironmentIds={savedEnvironmentIds}
+        />
+      ) : null}
+
       <SettingsSection
         {...searchableSetting("remote-environments")}
         headerAction={
@@ -3444,7 +3485,7 @@ export function ConnectionsSettings() {
           </Dialog>
         }
       >
-        {savedEnvironments.map((environment) => (
+        {remoteEnvironments.map((environment) => (
           <SavedBackendListRow
             key={environment.environmentId}
             environment={environment}
@@ -3455,7 +3496,7 @@ export function ConnectionsSettings() {
         ))}
         <CloudRemoteEnvironmentRows
           primaryEnvironmentId={primaryEnvironmentId}
-          savedEnvironments={savedEnvironments}
+          savedEnvironments={remoteEnvironments}
         />
       </SettingsSection>
     </SettingsPageContainer>

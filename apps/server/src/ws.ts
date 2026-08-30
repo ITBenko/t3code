@@ -34,6 +34,7 @@ import {
   OrchestrationGetSnapshotError,
   OrchestrationSearchThreadsError,
   OrchestrationGetTurnDiffError,
+  LocalDockerSandboxError,
   ORCHESTRATION_WS_METHODS,
   type ProjectId,
   type ProjectEntriesFailure,
@@ -132,6 +133,7 @@ import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
 import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
+import * as LocalDockerSandboxManager from "./localDockerSandbox/Manager.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
@@ -424,6 +426,7 @@ const makeWsRpcLayer = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   clientOrigin: OrchestrationClientOrigin,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  localDockerSandboxes: LocalDockerSandboxManager.LocalDockerSandboxManager["Service"],
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -1792,6 +1795,64 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "cloud" },
           ),
+        [WS_METHODS.localDockerSandboxesList]: (_input) =>
+          observeRpcEffect(WS_METHODS.localDockerSandboxesList, localDockerSandboxes.list, {
+            "rpc.aggregate": "local-docker-sandboxes",
+          }),
+        [WS_METHODS.localDockerSandboxesCreate]: (_input) =>
+          observeRpcEffect(WS_METHODS.localDockerSandboxesCreate, localDockerSandboxes.create, {
+            "rpc.aggregate": "local-docker-sandboxes",
+          }),
+        [WS_METHODS.localDockerSandboxesStart]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.localDockerSandboxesStart,
+            localDockerSandboxes.start(input),
+            { "rpc.aggregate": "local-docker-sandboxes" },
+          ),
+        [WS_METHODS.localDockerSandboxesStop]: (input) =>
+          observeRpcEffect(WS_METHODS.localDockerSandboxesStop, localDockerSandboxes.stop(input), {
+            "rpc.aggregate": "local-docker-sandboxes",
+          }),
+        [WS_METHODS.localDockerSandboxesDelete]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.localDockerSandboxesDelete,
+            localDockerSandboxes.delete(input),
+            { "rpc.aggregate": "local-docker-sandboxes" },
+          ),
+        [WS_METHODS.localDockerSandboxesPair]: (input) =>
+          observeRpcEffect(WS_METHODS.localDockerSandboxesPair, localDockerSandboxes.pair(input), {
+            "rpc.aggregate": "local-docker-sandboxes",
+          }),
+        [WS_METHODS.localDockerSandboxesPrepareWorkspace]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.localDockerSandboxesPrepareWorkspace,
+            Effect.gen(function* () {
+              // The client names a project, never a path: the checkout location
+              // is resolved here so no host path crosses the wire.
+              const project = yield* projectionSnapshotQuery
+                .getProjectShellById(input.projectId)
+                .pipe(
+                  Effect.mapError(
+                    () =>
+                      new LocalDockerSandboxError({
+                        operation: "prepare-workspace",
+                        reason: "project-not-found",
+                      }),
+                  ),
+                );
+              if (Option.isNone(project)) {
+                return yield* new LocalDockerSandboxError({
+                  operation: "prepare-workspace",
+                  reason: "project-not-found",
+                });
+              }
+              return yield* localDockerSandboxes.prepareWorkspace({
+                sandboxId: input.sandboxId,
+                projectRoot: project.value.workspaceRoot,
+              });
+            }),
+            { "rpc.aggregate": "local-docker-sandboxes" },
+          ),
         [WS_METHODS.pullRequestsList]: (input) =>
           observeRpcEffect(WS_METHODS.pullRequestsList, pullRequests.list(input), {
             "rpc.aggregate": "pull-requests",
@@ -2462,6 +2523,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const localDockerSandboxes = yield* LocalDockerSandboxManager.LocalDockerSandboxManager;
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -2488,7 +2550,12 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           disableTracing: true,
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(session, clientOrigin, previewAutomationBroker).pipe(
+            makeWsRpcLayer(
+              session,
+              clientOrigin,
+              previewAutomationBroker,
+              localDockerSandboxes,
+            ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),

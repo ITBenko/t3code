@@ -12,6 +12,7 @@ import {
   ProviderInstanceId,
   type ServerProvider,
   type ResolvedKeybindingsConfig,
+  type ScopedProjectRef,
   type ScopedThreadRef,
   type ThreadId,
   type TurnId,
@@ -186,6 +187,7 @@ import {
 } from "lucide-react";
 import { cn, randomHex } from "~/lib/utils";
 import { stackedThreadToast, toastManager } from "./ui/toast";
+import { useSandboxDraftTarget } from "../hooks/useSandboxDraftTarget";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
 import { type NewProjectScriptInput } from "./ProjectScriptsControl";
 import {
@@ -2925,6 +2927,48 @@ function ChatViewContent(props: ChatViewProps) {
     [draftId, envLocked, logicalProjectEnvironments, setDraftThreadContext],
   );
 
+  const reportSandboxFailure = useCallback((description: string) => {
+    toastManager.add(
+      stackedThreadToast({
+        type: "error",
+        title: "Docker sandbox",
+        description,
+      }),
+    );
+  }, []);
+  const setDraftProjectRef = useCallback(
+    (targetDraftId: DraftId, projectRef: ScopedProjectRef) => {
+      setDraftThreadContext(targetDraftId, { projectRef });
+    },
+    [setDraftThreadContext],
+  );
+  const [sandboxPendingDraftId, setSandboxPendingDraftId] = useState<DraftId | null>(null);
+  // Selecting only records intent; the container work happens on send, so
+  // changing your mind before sending costs nothing.
+  const onSelectSandbox = useCallback(() => {
+    if (draftId) setSandboxPendingDraftId(draftId);
+  }, [draftId]);
+  const sandboxProject = useMemo(
+    () =>
+      activeProject ? { id: activeProject.id, environmentId: activeProject.environmentId } : null,
+    [activeProject],
+  );
+  const sandboxTarget = useSandboxDraftTarget({
+    onSelect: onSelectSandbox,
+    draftId: draftId ?? undefined,
+    primaryEnvironmentId,
+    activeProject: sandboxProject,
+    envLocked,
+    setProjectRef: setDraftProjectRef,
+    onFailure: reportSandboxFailure,
+  });
+  const sandboxPending = draftId !== null && sandboxPendingDraftId === draftId;
+  const sandboxPrepareInFlightRef = useRef(false);
+  const sandboxResendRef = useRef<{
+    projectId: ProjectId;
+    intent: ComposerSubmissionIntent;
+  } | null>(null);
+
   const activeTerminalGroup =
     terminalUiState.terminalGroups.find(
       (group) => group.id === terminalUiState.activeTerminalGroupId,
@@ -5357,6 +5401,20 @@ function ChatViewContent(props: ChatViewProps) {
       notifyDirectAnnotationAttached();
       return;
     }
+    if (sandboxPending && sandboxTarget && draftId) {
+      // Set up the sandbox now that the user has committed, then resend once the
+      // draft has moved onto it. The composer keeps its content either way.
+      if (sandboxPrepareInFlightRef.current) return;
+      sandboxPrepareInFlightRef.current = true;
+      const target = await sandboxTarget.prepare();
+      sandboxPrepareInFlightRef.current = false;
+      // The mark survives a failure on purpose. Clearing it would drop the next
+      // send onto the host checkout, which is the one place this must never go.
+      if (target === null) return;
+      setSandboxPendingDraftId(null);
+      sandboxResendRef.current = { projectId: target.projectId, intent: submissionIntent };
+      return;
+    }
     if (activeEnvironmentUnavailable) {
       toastManager.add(
         stackedThreadToast({
@@ -6001,6 +6059,18 @@ function ChatViewContent(props: ChatViewProps) {
       resetLocalDispatch();
     }
   };
+
+  // `onSend` is redefined every render, so the resend runs through a ref: the
+  // draft has moved to another environment by the time this fires, and the
+  // closure that started the flow is stale.
+  const onSendRef = useRef(onSend);
+  onSendRef.current = onSend;
+  useEffect(() => {
+    const pending = sandboxResendRef.current;
+    if (pending === null || activeProject?.id !== pending.projectId) return;
+    sandboxResendRef.current = null;
+    void onSendRef.current(undefined, pending.intent);
+  }, [activeProject]);
 
   const onInterrupt = async () => {
     if (!activeThread) return;
@@ -7141,6 +7211,8 @@ function ChatViewContent(props: ChatViewProps) {
                                   ? { onCheckoutPullRequestRequest: openPullRequestDialog }
                                   : {})}
                                 {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
+                                {...(sandboxTarget ? { onUseSandbox: sandboxTarget.select } : {})}
+                                sandboxPending={sandboxPending}
                                 availableEnvironments={logicalProjectEnvironments}
                               />
                             </div>

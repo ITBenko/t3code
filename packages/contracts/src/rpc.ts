@@ -205,6 +205,17 @@ import {
   SourceControlRepositoryLookupInput,
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
+import {
+  LocalDockerSandbox,
+  LocalDockerSandboxCreateResult,
+  LocalDockerSandboxError,
+  LocalDockerSandboxListResult,
+  LocalDockerSandboxPairResult,
+  LocalDockerSandboxPrepareWorkspaceInput,
+  LocalDockerSandboxPrepareWorkspaceResult,
+  LocalDockerSandboxStartResult,
+  LocalDockerSandboxTargetInput,
+} from "./localDockerSandbox.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -296,6 +307,15 @@ export const WS_METHODS = {
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
 
+  // Local Docker sandbox methods
+  localDockerSandboxesList: "localDockerSandboxes.list",
+  localDockerSandboxesCreate: "localDockerSandboxes.create",
+  localDockerSandboxesStart: "localDockerSandboxes.start",
+  localDockerSandboxesStop: "localDockerSandboxes.stop",
+  localDockerSandboxesDelete: "localDockerSandboxes.delete",
+  localDockerSandboxesPair: "localDockerSandboxes.pair",
+  localDockerSandboxesPrepareWorkspace: "localDockerSandboxes.prepareWorkspace",
+
   // Pull request methods
   pullRequestsList: "pullRequests.list",
   pullRequestsListStats: "pullRequests.listStats",
@@ -356,6 +376,56 @@ export const WsServerGetConfigRpc = Rpc.make(WS_METHODS.serverGetConfig, {
   success: ServerConfig,
   error: Schema.Union([KeybindingsConfigError, ServerSettingsError, EnvironmentAuthorizationError]),
 });
+
+const LocalDockerSandboxRpcError = Schema.Union([
+  LocalDockerSandboxError,
+  EnvironmentAuthorizationError,
+]);
+
+export const WsLocalDockerSandboxesListRpc = Rpc.make(WS_METHODS.localDockerSandboxesList, {
+  payload: Schema.Struct({}),
+  success: LocalDockerSandboxListResult,
+  error: LocalDockerSandboxRpcError,
+});
+
+export const WsLocalDockerSandboxesCreateRpc = Rpc.make(WS_METHODS.localDockerSandboxesCreate, {
+  payload: Schema.Struct({}),
+  success: LocalDockerSandboxCreateResult,
+  error: LocalDockerSandboxRpcError,
+});
+
+export const WsLocalDockerSandboxesStartRpc = Rpc.make(WS_METHODS.localDockerSandboxesStart, {
+  payload: LocalDockerSandboxTargetInput,
+  success: LocalDockerSandboxStartResult,
+  error: LocalDockerSandboxRpcError,
+});
+
+export const WsLocalDockerSandboxesStopRpc = Rpc.make(WS_METHODS.localDockerSandboxesStop, {
+  payload: LocalDockerSandboxTargetInput,
+  success: LocalDockerSandbox,
+  error: LocalDockerSandboxRpcError,
+});
+
+export const WsLocalDockerSandboxesDeleteRpc = Rpc.make(WS_METHODS.localDockerSandboxesDelete, {
+  payload: LocalDockerSandboxTargetInput,
+  success: Schema.Struct({}),
+  error: LocalDockerSandboxRpcError,
+});
+
+export const WsLocalDockerSandboxesPairRpc = Rpc.make(WS_METHODS.localDockerSandboxesPair, {
+  payload: LocalDockerSandboxTargetInput,
+  success: LocalDockerSandboxPairResult,
+  error: LocalDockerSandboxRpcError,
+});
+
+export const WsLocalDockerSandboxesPrepareWorkspaceRpc = Rpc.make(
+  WS_METHODS.localDockerSandboxesPrepareWorkspace,
+  {
+    payload: LocalDockerSandboxPrepareWorkspaceInput,
+    success: LocalDockerSandboxPrepareWorkspaceResult,
+    error: LocalDockerSandboxRpcError,
+  },
+);
 
 export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProviders, {
   payload: Schema.Struct({
@@ -1041,6 +1111,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetBackgroundPolicyRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
+  WsLocalDockerSandboxesListRpc,
+  WsLocalDockerSandboxesCreateRpc,
+  WsLocalDockerSandboxesStartRpc,
+  WsLocalDockerSandboxesStopRpc,
+  WsLocalDockerSandboxesDeleteRpc,
+  WsLocalDockerSandboxesPairRpc,
+  WsLocalDockerSandboxesPrepareWorkspaceRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsDetailRpc,

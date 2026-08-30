@@ -105,6 +105,21 @@ const EnvServerConfig = Config.all({
   port: Config.port("T3CODE_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
   host: Config.string("T3CODE_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
   t3Home: Config.string("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  localDockerSandboxImage: Config.string("T3CODE_DOCKER_SANDBOX_IMAGE").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
+  localDockerSandboxSeedCredentials: Config.boolean("T3CODE_DOCKER_SANDBOX_SEED_CREDENTIALS").pipe(
+    Config.withDefault(false),
+  ),
+  localDockerSandboxCodexApiKey: Config.string("T3CODE_DOCKER_SANDBOX_CODEX_API_KEY").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
+  localDockerSandboxAnthropicApiKey: Config.string("T3CODE_DOCKER_SANDBOX_ANTHROPIC_API_KEY").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
   devUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
   devAllowedOrigins: Config.string("T3CODE_DEV_ALLOWED_ORIGINS").pipe(
     Config.withDefault(""),
@@ -370,6 +385,18 @@ export const resolveServerConfig = (
       port,
       cwd,
       baseDir,
+      ...(env.localDockerSandboxImage?.trim()
+        ? { localDockerSandboxImage: env.localDockerSandboxImage.trim() }
+        : {}),
+      ...(env.localDockerSandboxSeedCredentials
+        ? { localDockerSandboxSeedCredentials: true as const }
+        : {}),
+      ...(env.localDockerSandboxCodexApiKey?.trim()
+        ? { localDockerSandboxCodexApiKey: env.localDockerSandboxCodexApiKey.trim() }
+        : {}),
+      ...(env.localDockerSandboxAnthropicApiKey?.trim()
+        ? { localDockerSandboxAnthropicApiKey: env.localDockerSandboxAnthropicApiKey.trim() }
+        : {}),
       ...derivedPaths,
       serverTracePath,
       host,

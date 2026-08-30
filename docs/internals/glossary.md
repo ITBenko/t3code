@@ -28,6 +28,10 @@ The root filesystem path for a project. In [the orchestration model][1], it is t
 
 A Git worktree used as an isolated workspace for a thread. If a thread has a `worktreePath` in [the contracts][1], it runs there instead of in the main working tree. Git operations live behind the VCS driver contract in `apps/server/src/vcs/VcsDriver.ts`, implemented by [GitVcsDriverCore.ts][3].
 
+#### Local Docker sandbox
+
+A container the host server launches from an operator-approved image, running a complete headless T3 Code server with its own workspace, T3 data, and home volumes. It is a separate environment paired through the normal onboarding flow, not a workspace mode: `ThreadEnvMode` stays `local | worktree`. Managed by [localDockerSandbox/Manager.ts][25]. See [local-docker-sandboxes.md][26].
+
 ### Thread timeline
 
 #### Thread
@@ -183,3 +187,5 @@ The file patch and changed-file summary for one turn. It is usually computed in 
 [22]: ../../apps/server/src/checkpointing/Utils.ts
 [23]: ../../apps/server/src/checkpointing/Diffs.ts
 [24]: ./overview.md
+[25]: ../../apps/server/src/localDockerSandbox/Manager.ts
+[26]: ./local-docker-sandboxes.md

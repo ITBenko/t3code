@@ -1,10 +1,11 @@
-import { FolderGit2Icon, FolderGitIcon, FolderIcon, HistoryIcon } from "lucide-react";
+import { BoxIcon, FolderGit2Icon, FolderGitIcon, FolderIcon, HistoryIcon } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import {
   resolveCurrentWorkspaceLabel,
   resolveEnvModeLabel,
   resolveLockedWorkspaceLabel,
+  SANDBOX_ENV_LABEL,
   type EnvMode,
 } from "./BranchToolbar.logic";
 import {
@@ -18,6 +19,9 @@ import {
 } from "./ui/select";
 
 export const PREVIOUS_WORKTREE_SELECT_VALUE = "previous-worktree";
+// Not an env mode: choosing it moves the draft to the sandbox environment, so
+// it lives alongside the modes as an action rather than a persisted value.
+export const SANDBOX_SELECT_VALUE = "local-docker-sandbox";
 
 interface BranchToolbarEnvModeSelectorProps {
   envLocked: boolean;
@@ -26,6 +30,8 @@ interface BranchToolbarEnvModeSelectorProps {
   onEnvModeChange: (mode: EnvMode) => void;
   previousWorktreeLabel?: string | null;
   onUsePreviousWorktree?: () => void;
+  onUseSandbox?: () => void;
+  sandboxPending?: boolean;
 }
 
 export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSelector({
@@ -35,6 +41,8 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
   onEnvModeChange,
   previousWorktreeLabel,
   onUsePreviousWorktree,
+  onUseSandbox,
+  sandboxPending = false,
 }: BranchToolbarEnvModeSelectorProps) {
   const showPreviousWorktree = Boolean(previousWorktreeLabel && onUsePreviousWorktree);
   const envModeItems = useMemo(
@@ -44,8 +52,9 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
       ...(showPreviousWorktree && previousWorktreeLabel
         ? [{ value: PREVIOUS_WORKTREE_SELECT_VALUE, label: previousWorktreeLabel }]
         : []),
+      ...(onUseSandbox ? [{ value: SANDBOX_SELECT_VALUE, label: SANDBOX_ENV_LABEL }] : []),
     ],
-    [activeWorktreePath, previousWorktreeLabel, showPreviousWorktree],
+    [activeWorktreePath, onUseSandbox, previousWorktreeLabel, showPreviousWorktree],
   );
 
   if (envLocked) {
@@ -72,10 +81,14 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
   return (
     <Select
       modal={false}
-      value={effectiveEnvMode}
+      value={sandboxPending ? SANDBOX_SELECT_VALUE : effectiveEnvMode}
       onValueChange={(value: string | null) => {
         if (value === PREVIOUS_WORKTREE_SELECT_VALUE) {
           onUsePreviousWorktree?.();
+          return;
+        }
+        if (value === SANDBOX_SELECT_VALUE) {
+          onUseSandbox?.();
           return;
         }
         onEnvModeChange(value as EnvMode);
@@ -89,7 +102,9 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
         aria-label="Workspace"
         data-composer-context-control
       >
-        {effectiveEnvMode === "worktree" ? (
+        {sandboxPending ? (
+          <BoxIcon className="size-3" />
+        ) : effectiveEnvMode === "worktree" ? (
           <FolderGit2Icon className="size-3" />
         ) : activeWorktreePath ? (
           <FolderGitIcon className="size-3" />
@@ -132,6 +147,14 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
               <span className="inline-flex items-center gap-1.5">
                 <HistoryIcon className="size-3" />
                 {previousWorktreeLabel}
+              </span>
+            </SelectItem>
+          ) : null}
+          {onUseSandbox ? (
+            <SelectItem value={SANDBOX_SELECT_VALUE}>
+              <span className="inline-flex items-center gap-1.5">
+                <BoxIcon className="size-3" />
+                {SANDBOX_ENV_LABEL}
               </span>
             </SelectItem>
           ) : null}

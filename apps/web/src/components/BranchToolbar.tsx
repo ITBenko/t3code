@@ -1,6 +1,7 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import {
+  BoxIcon,
   ChevronDownIcon,
   CloudIcon,
   FolderGit2Icon,
@@ -23,11 +24,12 @@ import {
   resolveLockedWorkspaceLabel,
   resolvePreviousWorktreeLabel,
   resolvePreviousWorktreeSeed,
+  SANDBOX_ENV_LABEL,
   shouldShowEnvironmentIndicator,
 } from "./BranchToolbar.logic";
 import { BranchToolbarBranchSelector } from "./BranchToolbarBranchSelector";
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
-import { BranchToolbarEnvModeSelector } from "./BranchToolbarEnvModeSelector";
+import { BranchToolbarEnvModeSelector, SANDBOX_SELECT_VALUE } from "./BranchToolbarEnvModeSelector";
 import { Button } from "./ui/button";
 import {
   Menu,
@@ -57,6 +59,9 @@ interface BranchToolbarProps {
   onComposerFocusRequest?: () => void;
   availableEnvironments?: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
+  onUseSandbox?: () => void;
+  /** The draft is bound for a sandbox but has not been sent yet. */
+  sandboxPending?: boolean;
 }
 
 interface MobileRunContextSelectorProps {
@@ -72,6 +77,8 @@ interface MobileRunContextSelectorProps {
   onEnvModeChange: (mode: EnvMode) => void;
   previousWorktreeLabel: string | null;
   onUsePreviousWorktree: () => void;
+  onUseSandbox: (() => void) | undefined;
+  sandboxPending: boolean;
 }
 
 const MobileRunContextSelector = memo(function MobileRunContextSelector({
@@ -87,6 +94,8 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
   onEnvModeChange,
   previousWorktreeLabel,
   onUsePreviousWorktree,
+  onUseSandbox,
+  sandboxPending,
 }: MobileRunContextSelectorProps) {
   const activeEnvironment = useMemo(
     () => availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null,
@@ -98,11 +107,13 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
       : activeWorktreePath
         ? FolderGitIcon
         : FolderIcon;
-  const workspaceLabel = envModeLocked
-    ? resolveLockedWorkspaceLabel(activeWorktreePath)
-    : effectiveEnvMode === "worktree"
-      ? resolveEnvModeLabel("worktree")
-      : resolveCurrentWorkspaceLabel(activeWorktreePath);
+  const workspaceLabel = sandboxPending
+    ? SANDBOX_ENV_LABEL
+    : envModeLocked
+      ? resolveLockedWorkspaceLabel(activeWorktreePath)
+      : effectiveEnvMode === "worktree"
+        ? resolveEnvModeLabel("worktree")
+        : resolveCurrentWorkspaceLabel(activeWorktreePath);
   const isLocked = envLocked || envModeLocked;
   const EnvironmentIcon = activeEnvironment?.isPrimary ? MonitorIcon : CloudIcon;
   const icon = showEnvironmentIndicator ? (
@@ -173,10 +184,14 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
         <MenuGroup>
           <MenuGroupLabel>Workspace</MenuGroupLabel>
           <MenuRadioGroup
-            value={effectiveEnvMode}
+            value={sandboxPending ? SANDBOX_SELECT_VALUE : effectiveEnvMode}
             onValueChange={(value) => {
               if (value === "previous-worktree") {
                 onUsePreviousWorktree();
+                return;
+              }
+              if (value === SANDBOX_SELECT_VALUE) {
+                onUseSandbox?.();
                 return;
               }
               onEnvModeChange(value as EnvMode);
@@ -205,6 +220,14 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
                 <span className="flex min-w-0 items-center gap-1.5">
                   <HistoryIcon className="size-3" />
                   <span className="min-w-0 truncate">{previousWorktreeLabel}</span>
+                </span>
+              </MenuRadioItem>
+            ) : null}
+            {onUseSandbox ? (
+              <MenuRadioItem disabled={envModeLocked} value={SANDBOX_SELECT_VALUE}>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <BoxIcon className="size-3" />
+                  <span className="min-w-0 truncate">{SANDBOX_ENV_LABEL}</span>
                 </span>
               </MenuRadioItem>
             ) : null}
@@ -389,6 +412,8 @@ export const BranchToolbar = memo(function BranchToolbar({
   onComposerFocusRequest,
   availableEnvironments,
   onEnvironmentChange,
+  onUseSandbox,
+  sandboxPending = false,
 }: BranchToolbarProps) {
   const threadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
@@ -485,6 +510,8 @@ export const BranchToolbar = memo(function BranchToolbar({
           onEnvModeChange={onEnvModeChange}
           previousWorktreeLabel={previousWorktreeLabel}
           onUsePreviousWorktree={onUsePreviousWorktree}
+          onUseSandbox={onUseSandbox}
+          sandboxPending={sandboxPending}
         />
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -513,6 +540,8 @@ export const BranchToolbar = memo(function BranchToolbar({
               onEnvModeChange={onEnvModeChange}
               previousWorktreeLabel={previousWorktreeLabel}
               onUsePreviousWorktree={onUsePreviousWorktree}
+              {...(onUseSandbox ? { onUseSandbox } : {})}
+              sandboxPending={sandboxPending}
             />
           ) : null}
         </div>
